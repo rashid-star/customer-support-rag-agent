@@ -6,16 +6,18 @@ from pydantic import BaseModel, Field
 from agent.chatbot import generate_response
 
 
-# fastapi app
+# create fastapi app
 app = FastAPI(
     title="Customer Support RAG Agent"
 )
 
 
-# request schema
 class ChatRequest(BaseModel):
 
-    # user query validation
+    """
+    Request body schema.
+    """
+
     query: str = Field(
         ...,
         min_length=2,
@@ -23,7 +25,7 @@ class ChatRequest(BaseModel):
     )
 
 
-# health check api
+# health check endpoint
 @app.get("/")
 def home():
 
@@ -32,23 +34,26 @@ def home():
     }
 
 
-# main chatbot api
+# main chatbot endpoint
 @app.post("/chat")
 def chat(request: ChatRequest):
 
     try:
 
-        # generate ai response
+        # generate chatbot response
         response = generate_response(
             request.query
         )
 
         return response
 
-    except Exception as e:
 
-        # backend error handling
+    except Exception:
+
+        # generic backend error
         raise HTTPException(
+
             status_code=500,
-            detail=str(e)
+
+            detail="Internal Server Error"
         )

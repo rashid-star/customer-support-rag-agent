@@ -1,22 +1,20 @@
 # ingestion/ingest.py
-
 """
 RAG INGESTION PIPELINE
 
 This script:
 
 1. Loads customer support dataset
-2. Cleans bad text
+2. Cleans noisy text
 3. Creates structured documents
 4. Splits documents into chunks
-5. Converts text → embeddings
+5. Converts chunks into embeddings
 6. Stores embeddings in FAISS vector DB
 
 FAISS becomes the chatbot knowledge base.
 """
 
 import pandas as pd
-import numpy as np
 
 from dotenv import load_dotenv
 
@@ -61,14 +59,18 @@ def load_dataset():
 
     print("\nLoading dataset...")
 
+
     df = pd.read_csv(DATASET_PATH)
 
+
     # IMPORTANT:
-    # limit dataset during testing
-    # remove later for full production
-    df = df.head(5000)
+    # smaller dataset gives cleaner retrieval
+    # enough for project demo
+    df = df.head(3000)
+
 
     print(f"Dataset loaded: {len(df)} rows")
+
 
     return df
 
@@ -81,17 +83,12 @@ def clean_data(df):
 
     """
     Clean dataset text.
-
-    Removes:
-    - placeholders
-    - null values
-    - duplicate rows
     """
 
     print("\nCleaning dataset...")
 
 
-    # remove placeholder patterns
+    # remove placeholders
     df["instruction"] = (
 
         df["instruction"]
@@ -120,19 +117,26 @@ def clean_data(df):
     )
 
 
-    # remove empty rows
+    # remove null rows
     df = df.dropna(
         subset=["instruction", "response"]
     )
 
 
-    # remove duplicates
+    # remove duplicate rows
     df = df.drop_duplicates(
         subset=["instruction", "response"]
     )
 
 
+    # remove weak/broken responses
+    df = df[
+        df["response"].str.len() > 20
+    ]
+
+
     print(f"Clean dataset rows: {len(df)}")
+
 
     return df
 
@@ -144,28 +148,20 @@ def clean_data(df):
 def create_documents(df):
 
     """
-    Convert rows into LangChain Documents.
-
-    Documents contain:
-    - content
-    - metadata
+    Convert dataset rows into LangChain documents.
     """
 
     print("\nCreating documents...")
+
 
     documents = []
 
 
     for _, row in df.iterrows():
 
-        # IMPORTANT:
-        # structured formatting improves retrieval
+
+        # clean structured content
         content = f"""
-
-Category: {row['category']}
-
-Intent: {row['intent']}
-
 Customer Question:
 {row['instruction']}
 
@@ -174,7 +170,7 @@ Support Answer:
 """
 
 
-        # metadata helps filtering/routing later
+        # metadata helps filtering later
         metadata = {
 
             "category": row["category"],
@@ -183,7 +179,7 @@ Support Answer:
         }
 
 
-        # create LangChain document
+        # create document
         doc = Document(
 
             page_content=content,
@@ -197,6 +193,7 @@ Support Answer:
 
     print(f"Documents created: {len(documents)}")
 
+
     return documents
 
 
@@ -207,27 +204,25 @@ Support Answer:
 def split_documents(documents):
 
     """
-    Split large documents into smaller chunks.
+    Split documents into smaller chunks.
 
-    Why chunking matters:
-    - improves retrieval accuracy
-    - better embeddings
-    - better context matching
+    Smaller chunks improve:
+    - retrieval quality
+    - semantic matching
+    - response cleanliness
     """
 
     print("\nSplitting documents...")
 
 
-    # recursive splitter keeps semantic structure
     text_splitter = RecursiveCharacterTextSplitter(
 
-        # max characters per chunk
-        chunk_size=400,
+        # smaller chunks = cleaner retrieval
+        chunk_size=300,
 
-        # overlap preserves context continuity
+        # overlap preserves context
         chunk_overlap=50,
 
-        # preferred split order
         separators=[
             "\n\n",
             "\n",
@@ -244,28 +239,25 @@ def split_documents(documents):
 
     print(f"Chunks created: {len(split_docs)}")
 
+
     return split_docs
 
 
 # =========================================
-# CREATE EMBEDDINGS + FAISS
+# CREATE FAISS VECTOR DB
 # =========================================
 
 def create_faiss_index(split_docs):
 
     """
-    Convert chunks into vector embeddings.
-
-    Embeddings:
-    text → numerical vector representation
-
-    FAISS stores vectors for semantic search.
+    Convert chunks into embeddings
+    and store them in FAISS.
     """
 
     print("\nLoading embedding model...")
 
 
-    # lightweight fast embedding model
+    # lightweight embedding model
     embeddings = HuggingFaceEmbeddings(
 
         model_name="sentence-transformers/all-MiniLM-L6-v2"
@@ -286,6 +278,7 @@ def create_faiss_index(split_docs):
 
     print("FAISS index created successfully")
 
+
     return vector_store
 
 
@@ -301,7 +294,7 @@ def save_faiss_index(
 ):
 
     """
-    Save FAISS index locally.
+    Save FAISS vector database locally.
     """
 
     print(f"\nSaving FAISS index to '{path}'...")
@@ -323,33 +316,33 @@ def main():
     Complete ingestion workflow.
     """
 
-    # load env variables
+    # load environment variables
     load_dotenv()
 
 
-    # step 1
+    # step 1 → load dataset
     df = load_dataset()
 
 
-    # step 2
+    # step 2 → clean data
     df = clean_data(df)
 
 
-    # step 3
+    # step 3 → create documents
     documents = create_documents(df)
 
 
-    # step 4
+    # step 4 → split documents
     split_docs = split_documents(documents)
 
 
-    # step 5
+    # step 5 → create vector database
     vector_store = create_faiss_index(
         split_docs
     )
 
 
-    # step 6
+    # step 6 → save faiss index
     save_faiss_index(vector_store)
 
 

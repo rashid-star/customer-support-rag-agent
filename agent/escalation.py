@@ -4,40 +4,27 @@
 def should_escalate(response: str):
 
     """
-    Detect whether AI response should
-    be escalated to human support.
+    Detect low-confidence AI responses.
     """
 
-    # convert response to lowercase
     response = response.lower()
 
 
-    # low-confidence phrases
     low_confidence_phrases = [
+
+        "i could not find enough information",
 
         "i do not have enough information",
 
-        "i cannot answer",
-
-        "not available in the context",
-
-        "i am not sure",
-
         "unable to determine",
 
-        "please contact support",
-
-        "human support",
-
-        "unable to help"
+        "not enough information"
     ]
 
 
-    # check for escalation phrases
     for phrase in low_confidence_phrases:
 
         if phrase in response:
-
             return True
 
 
@@ -47,227 +34,123 @@ def should_escalate(response: str):
 def classify_support_issue(query: str):
 
     """
-    Classify customer issue type.
-
-    Helps route issues properly.
+    Detect customer issue category.
     """
 
     query = query.lower()
 
 
-    # =========================================
-    # PAYMENT ISSUES
-    # =========================================
-
     payment_keywords = [
 
-        "payment failed",
-        "payment declined",
+        "payment",
         "money deducted",
-        "money cut",
-        "charged twice",
-        "refund not received",
+        "upi failed",
         "transaction failed",
-        "bank charged",
-        "upi failed"
+        "refund not received"
     ]
 
-
-    # =========================================
-    # DELIVERY ISSUES
-    # =========================================
 
     delivery_keywords = [
 
-        "delivery delayed",
-        "shipment delayed",
-        "where is my order",
+        "delivery",
+        "shipment",
         "track order",
-        "not delivered",
-        "late delivery"
+        "not delivered"
     ]
 
-
-    # =========================================
-    # ACCOUNT ISSUES
-    # =========================================
 
     account_keywords = [
 
-        "forgot password",
-        "reset password",
-        "login failed",
-        "cannot login",
+        "password",
+        "login",
         "account locked",
-        "account issue"
+        "reset password"
     ]
 
-
-    # =========================================
-    # REFUND ISSUES
-    # =========================================
 
     refund_keywords = [
 
         "refund",
         "return order",
-        "cancel order",
-        "refund delayed"
+        "cancel order"
     ]
 
 
-    # detect payment issue
     for keyword in payment_keywords:
 
         if keyword in query:
-
             return "payment"
 
 
-    # detect delivery issue
     for keyword in delivery_keywords:
 
         if keyword in query:
-
             return "delivery"
 
 
-    # detect account issue
     for keyword in account_keywords:
 
         if keyword in query:
-
             return "account"
 
 
-    # detect refund issue
     for keyword in refund_keywords:
 
         if keyword in query:
-
             return "refund"
 
 
     return "general"
 
 
-def get_support_contact(issue_type: str):
+def get_support_email(issue_type: str):
 
     """
-    Return support contact details
-    based on issue category.
+    Return support email based on issue type.
     """
 
-    support_contacts = {
+    support_emails = {
 
-        "payment": {
+        "payment": "payments@company.com",
 
-            "team": "Payment Support Team",
+        "delivery": "delivery@company.com",
 
-            "phone": "+91-9876543210",
+        "account": "accounts@company.com",
 
-            "email": "payments@company.com",
+        "refund": "refunds@company.com",
 
-            "priority": "high"
-        },
-
-
-        "delivery": {
-
-            "team": "Delivery Support Team",
-
-            "phone": "+91-9123456780",
-
-            "email": "delivery@company.com",
-
-            "priority": "medium"
-        },
-
-
-        "account": {
-
-            "team": "Account Support Team",
-
-            "phone": "+91-9988776655",
-
-            "email": "accounts@company.com",
-
-            "priority": "high"
-        },
-
-
-        "refund": {
-
-            "team": "Refund Support Team",
-
-            "phone": "+91-9876501234",
-
-            "email": "refunds@company.com",
-
-            "priority": "medium"
-        },
-
-
-        "general": {
-
-            "team": "Customer Support Team",
-
-            "phone": "+91-9000000000",
-
-            "email": "support@company.com",
-
-            "priority": "normal"
-        }
+        "general": "support@company.com"
     }
 
 
-    return support_contacts.get(
+    return support_emails.get(
         issue_type,
-        support_contacts["general"]
+        support_emails["general"]
     )
 
 
 def generate_escalation_response(query: str):
 
     """
-    Generate professional escalation response.
+    Generate escalation response.
     """
 
-    # classify issue
     issue_type = classify_support_issue(query)
 
 
-    # fetch support details
-    support_info = get_support_contact(issue_type)
+    support_email = get_support_email(issue_type)
 
 
-    # build final response
-    response = {
+    return {
 
         "answer": (
 
-            f"We were unable to fully resolve your issue automatically.\n\n"
+            "I could not fully resolve your request automatically.\n\n"
 
-            f"Your request has been forwarded to the "
-            f"{support_info['team']}.\n\n"
+            "Please contact customer support through email:\n\n"
 
-            f"📞 Phone: {support_info['phone']}\n"
-
-            f"📧 Email: {support_info['email']}\n\n"
-
-            f"Priority Level: {support_info['priority'].upper()}"
+            f"{support_email}"
         ),
 
-        "escalate": True,
-
-        "confidence": "low",
-
-        "issue_type": issue_type,
-
-        "support_team": support_info["team"],
-
-        "priority": support_info["priority"]
+        "escalate": True
     }
-
-
-    return response

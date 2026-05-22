@@ -4,9 +4,9 @@ import streamlit as st
 import requests
 
 
-# =========================================
+# =====================================
 # PAGE CONFIG
-# =========================================
+# =====================================
 
 st.set_page_config(
 
@@ -18,65 +18,62 @@ st.set_page_config(
 )
 
 
-# =========================================
-# SIDEBAR
-# =========================================
+# =====================================
+# COMPANY HEADER
+# =====================================
 
-with st.sidebar:
-
-    st.title("⚙️ System Info")
-
-    st.markdown("""
-    ### Features
-    - RAG Chatbot
-    - FAISS Retrieval
-    - Escalation System
-    - FastAPI Backend
-    - Groq LLM
-    """)
-
-    st.markdown("---")
-
-    st.success("Backend Connected")
+col1, col2 = st.columns([1, 4])
 
 
-# =========================================
-# MAIN TITLE
-# =========================================
+with col1:
 
-st.title("🤖 Customer Support AI Agent")
+    # company logo
+    st.image(
+        "frontend/nine a logo.svg",
+        width=80
+    )
 
+
+with col2:
+
+    st.title("Customer Support AI Agent")
+
+    st.caption(
+        "9A Business Pvt. Ltd."
+    )
+
+
+# =====================================
+# SUBTITLE
+# =====================================
 
 st.markdown(
     """
-Ask your customer support questions below.
+Ask customer support related questions like:
 
-Examples:
-- Cancel my order
-- Payment failed
+- Cancel order
 - Refund issue
-- Delivery delayed
+- Payment failed
+- Delivery delay
+- Reset password
 """
 )
 
 
-# =========================================
-# BACKEND API
-# =========================================
-
+# backend api
 API_URL = "http://127.0.0.1:8000/chat"
 
 
-# =========================================
+# =====================================
 # CHAT HISTORY
-# =========================================
+# =====================================
 
 if "messages" not in st.session_state:
 
     st.session_state.messages = []
 
 
-# display old messages
+# show old messages
 for message in st.session_state.messages:
 
     with st.chat_message(message["role"]):
@@ -84,20 +81,21 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 
-# =========================================
+# =====================================
 # USER INPUT
-# =========================================
+# =====================================
 
 user_query = st.chat_input(
     "Type your question..."
 )
 
 
-# =========================================
+# =====================================
 # PROCESS USER MESSAGE
-# =========================================
+# =====================================
 
 if user_query:
+
 
     # save user message
     st.session_state.messages.append({
@@ -114,11 +112,13 @@ if user_query:
         st.markdown(user_query)
 
 
-    # assistant response area
+    # assistant response
     with st.chat_message("assistant"):
+
 
         # loading animation
         with st.spinner("Generating response..."):
+
 
             try:
 
@@ -133,15 +133,13 @@ if user_query:
                 )
 
 
-                # parse response
+                # convert response json
                 data = response.json()
 
 
                 ai_answer = data["answer"]
 
                 escalate = data["escalate"]
-
-                confidence = data["confidence"]
 
 
             except Exception as e:
@@ -152,8 +150,6 @@ if user_query:
 
                 escalate = False
 
-                confidence = "unknown"
-
 
         # show ai answer
         st.markdown(ai_answer)
@@ -163,25 +159,11 @@ if user_query:
         if escalate:
 
             st.warning(
-                "Escalated to Human Support"
+                "This request has been escalated to customer support."
             )
 
 
-        # confidence badge
-        if confidence == "high":
-
-            st.success(
-                f"Confidence: {confidence}"
-            )
-
-        else:
-
-            st.error(
-                f"Confidence: {confidence}"
-            )
-
-
-    # save assistant response
+    # save assistant message
     st.session_state.messages.append({
 
         "role": "assistant",

@@ -5,11 +5,10 @@ import os
 from dotenv import load_dotenv
 from groq import Groq
 
-# semantic retrieval
 from agent.retriever import search_documents
+from agent.escalation import should_escalate
 
-# escalation checker
-from agent.escalation import (should_escalate,generate_escalation_response)
+
 # load environment variables
 load_dotenv()
 
@@ -23,206 +22,207 @@ client = Groq(
 def build_context(documents):
 
     """
-    Combine retrieved documents into one context block.
+    Convert retrieved documents into clean context.
     """
 
-    context = "\n\n".join(
-        [doc["content"] for doc in documents]
-    )
-
-    return context
+    context_parts = []
 
 
-def detect_intent(query: str):
+    for doc in documents:
+
+        content = doc["content"]
+
+
+        # skip noisy or broken text
+        if "{{" in content:
+            continue
+
+
+        # skip empty content
+        if len(content.strip()) < 20:
+            continue
+
+
+        context_parts.append(content)
+
+
+    return "\n\n".join(context_parts)
+
+
+def is_simple_query(query: str):
 
     """
-    Detect special customer intents.
+    Simple greetings or casual queries.
+    LLM can answer these without retrieval.
+    """
 
-    This creates smarter chatbot behavior.
+    query = query.lower().strip()
+
+
+    simple_queries = [
+
+        "hi",
+        "hello",
+        "hey",
+        "good morning",
+        "good evening",
+        "how are you"
+    ]
+
+
+    return query in simple_queries
+
+
+def is_support_query(query: str):
+
+    """
+    Detect customer support related queries.
     """
 
     query = query.lower()
 
 
-    # payment-related sensitive issues
-    payment_issues = [
+    support_keywords = [
 
-        "payment failed",
-        "payment declined",
-        "money deducted",
-        "money cut",
-        "charged twice",
-        "refund not received",
-        "transaction failed",
-        "payment issue",
-        "bank charged",
-        "upi failed"
+        "order",
+        "cancel",
+        "refund",
+        "payment",
+        "delivery",
+        "shipment",
+        "track",
+        "return",
+        "account",
+        "password",
+        "login",
+        "support"
     ]
 
 
-    # delivery/shipping issues
-    shipping_issues = [
+    for keyword in support_keywords:
 
-        "order not delivered",
-        "delivery delayed",
-        "shipment delayed",
-        "track order",
-        "where is my order"
-    ]
+        if keyword in query:
+            return True
 
 
-    # account/login issues
-    account_issues = [
-
-        "reset password",
-        "forgot password",
-        "cannot login",
-        "account locked",
-        "login issue"
-    ]
+    return False
 
 
-    # detect payment issue
-    for issue in payment_issues:
+def generate_llm_reply(query: str):
 
-        if issue in query:
+    """
+    Generate normal conversational response.
+    """
 
-            return "payment_issue"
+    response = client.chat.completions.create(
+
+        model="llama-3.1-8b-instant",
+
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are a friendly and professional "
+                    "customer support assistant."
+                )
+            },
+            {
+                "role": "user",
+                "content": query
+            }
+        ],
+
+        temperature=0.5
+    )
 
 
-    # detect shipping issue
-    for issue in shipping_issues:
-
-        if issue in query:
-
-            return "shipping_issue"
-
-
-    # detect account issue
-    for issue in account_issues:
-
-        if issue in query:
-
-            return "account_issue"
-
-
-    return "general"
+    return response.choices[0].message.content.strip()
 
 
 def generate_response(query: str):
 
     """
-    Main RAG pipeline.
+    Main chatbot workflow.
     """
 
-    # detect user intent
-    intent = detect_intent(query)
+
+    # =====================================
+    # SIMPLE GREETINGS
+    # =====================================
+
+    if is_simple_query(query):
+
+        answer = generate_llm_reply(query)
+
+        return {
+
+            "answer": answer,
+
+            "escalate": False
+        }
 
 
-    # =========================================
-    # PAYMENT ISSUE
-    # =========================================
+    # =====================================
+    # OUT OF SCOPE QUESTIONS
+    # =====================================
 
-    if intent == "payment_issue":
+    if not is_support_query(query):
 
         return {
 
             "answer": (
-                "I'm sorry for the inconvenience regarding your payment issue.\n\n"
-
-                "Your payment may be under processing by the bank or payment gateway.\n\n"
-
-                "Please wait a few minutes and check your bank statement.\n\n"
-
-                "If the amount was deducted and the order was not confirmed, "
-                "please contact customer support immediately.\n\n"
-
-                "📞 Customer Care: +91-9876543210\n"
-                "📧 Email: support@company.com"
+                "I'm designed to assist with customer support related questions "
+                "such as orders, payments, refunds, delivery, and account issues."
             ),
 
-            "escalate": True,
-
-            "confidence": "high"
+            "escalate": False
         }
 
 
-    # =========================================
-    # SHIPPING ISSUE
-    # =========================================
+    # =====================================
+    # RETRIEVE RELEVANT DOCUMENTS
+    # =====================================
 
-    if intent == "shipping_issue":
-
-        return {
-
-            "answer": (
-                "I understand your concern regarding delivery/shipping.\n\n"
-
-                "Please check your order tracking details in your account.\n\n"
-
-                "If your shipment is delayed beyond the expected delivery date, "
-                "please contact customer support.\n\n"
-
-                "📞 Support: +91-9876543210"
-            ),
-
-            "escalate": False,
-
-            "confidence": "high"
-        }
-
-
-    # =========================================
-    # ACCOUNT ISSUE
-    # =========================================
-
-    if intent == "account_issue":
-
-        return {
-
-            "answer": (
-                "It seems you are facing an account or login issue.\n\n"
-
-                "Please try using the 'Forgot Password' option on the login page.\n\n"
-
-                "If the issue continues, contact account support.\n\n"
-
-                "📞 Account Support: +91-9876543210\n"
-                "📧 Email: support@company.com"
-            ),
-
-            "escalate": True,
-
-            "confidence": "high"
-        }
-
-
-    # =========================================
-    # RAG PIPELINE
-    # =========================================
-
-    # retrieve documents
     documents = search_documents(query)
 
 
-    # create context
+    # no relevant retrieval
+    if not documents:
+
+        return {
+
+            "answer": (
+                "I could not find enough information to help with your request.\n\n"
+                "Please contact support through email:\n"
+                "support@company.com"
+            ),
+
+            "escalate": True
+        }
+
+
+    # build clean context
     context = build_context(documents)
 
 
-    # final prompt
+    # =====================================
+    # FINAL RAG PROMPT
+    # =====================================
+
     prompt = f"""
-You are a professional customer support AI assistant.
+You are a professional customer support assistant.
 
-Your job:
-- Help users solve problems
-- Answer professionally
-- Be concise and clear
-- Use ONLY provided context
-- Do not hallucinate fake information
+Instructions:
+- Give short and clear answers
+- Answer naturally like a real support assistant
+- Summarize information instead of copying raw text
+- Do not mention placeholders or broken text
+- Do not generate fake information
+- Stay professional and helpful
 
-If the answer is unavailable in context,
-say exactly:
-"I do not have enough information to answer this."
+If answer is not available,
+say:
+"I could not find enough information regarding your request."
 
 CONTEXT:
 {context}
@@ -234,7 +234,10 @@ ANSWER:
 """
 
 
-    # generate llm response
+    # =====================================
+    # GENERATE FINAL RESPONSE
+    # =====================================
+
     response = client.chat.completions.create(
 
         model="llama-3.1-8b-instant",
@@ -246,47 +249,63 @@ ANSWER:
             }
         ],
 
-        temperature=0
+        temperature=0.3
     )
 
 
-    # extract final answer
-    final_answer = response.choices[0].message.content
+    final_answer = (
+        response
+        .choices[0]
+        .message
+        .content
+        .strip()
+    )
 
 
-    # =========================================
+    # =====================================
     # ESCALATION CHECK
-    # =========================================
+    # =====================================
 
     if should_escalate(final_answer):
 
-        return generate_escalation_response(query)
+        return {
+
+            "answer": (
+                "I could not fully resolve your request automatically.\n\n"
+                "Please contact customer support through email:\n"
+                "support@company.com"
+            ),
+
+            "escalate": True
+        }
 
 
-    # =========================================
+    # =====================================
     # SUCCESS RESPONSE
-    # =========================================
+    # =====================================
 
     return {
 
         "answer": final_answer,
 
-        "escalate": False,
-
-        "confidence": "high"
+        "escalate": False
     }
 
-# local terminal testing
+
+# local testing
 if __name__ == "__main__":
 
     while True:
 
         query = input("\nAsk Question: ")
 
+
         if query.lower() == "exit":
             break
 
+
         result = generate_response(query)
+
 
         print("\n" + "=" * 50)
         print("AI RESPONSE")
@@ -295,5 +314,3 @@ if __name__ == "__main__":
         print(result["answer"])
 
         print("\nEscalate:", result["escalate"])
-
-        print("Confidence:", result["confidence"])

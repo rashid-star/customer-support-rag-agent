@@ -4,14 +4,13 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 
 
-# IMPORTANT:
 # same embedding model used during ingestion
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
 
 
-# load saved FAISS vector database
+# load saved faiss vector database
 vector_store = FAISS.load_local(
 
     "faiss_index",
@@ -22,46 +21,62 @@ vector_store = FAISS.load_local(
 )
 
 
+def clean_content(text: str):
+
+    """
+    Remove noisy dataset text.
+    """
+
+    # remove empty placeholders
+    text = text.replace("{}", "")
+
+    text = text.replace("  ", " ")
+
+    text = text.strip()
+
+    return text
+
+
 def search_documents(query: str, k: int = 3):
 
     """
-    Search relevant documents with similarity scores.
-
-    Returns:
-    [
-        {
-            "content": ...,
-            "metadata": ...,
-            "score": ...
-        }
-    ]
+    Retrieve relevant documents from FAISS.
     """
 
-    # retrieve docs WITH similarity scores
+    # similarity search
     results = vector_store.similarity_search_with_score(
         query,
         k=k
     )
 
 
-    formatted_results = []
+    documents = []
 
 
-    # format results cleanly
     for doc, score in results:
 
-        formatted_results.append({
+        content = clean_content(
+            doc.page_content
+        )
 
-            "content": doc.page_content,
+
+        # skip weak retrievals
+        # lower score = better match
+        if score > 1.2:
+            continue
+
+
+        documents.append({
+
+            "content": content,
 
             "metadata": doc.metadata,
 
-            # convert numpy float to normal float
             "score": float(score)
         })
 
 
-    return formatted_results
+    return documents
 
 
 # local testing
@@ -78,6 +93,7 @@ if __name__ == "__main__":
     print("=" * 50)
 
 
+    # show retrieved docs
     for i, result in enumerate(results, start=1):
 
         print(f"\nDOCUMENT {i}")
@@ -88,5 +104,5 @@ if __name__ == "__main__":
         print("\nMetadata:")
         print(result["metadata"])
 
-        print("\nSimilarity Score:")
+        print("\nScore:")
         print(result["score"])
