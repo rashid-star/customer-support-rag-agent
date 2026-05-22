@@ -22,19 +22,9 @@ st.set_page_config(
 # COMPANY HEADER
 # =====================================
 
-col1, col2 = st.columns([1, 4])
+col = st.columns(1)[0].container()
 
-
-with col1:
-
-    # company logo
-    st.image(
-        "frontend/nine a logo.svg",
-        width=80
-    )
-
-
-with col2:
+with col:
 
     st.title("Customer Support AI Agent")
 
